@@ -1,0 +1,127 @@
+service: nuxt-cooking-search
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  stage: ${opt:stage, self:custom.defaultStage}
+  region: ap-northeast-1
+  memorySize: 256
+  logRetentionInDays: 14
+  lambdaHashingVersion: "20201221"
+
+functions:
+  nuxt:
+    handler: ./.output/server/index.handler
+    events:
+      - http:
+          path: /
+          method: ANY
+      - http:
+          path: /{proxy+}
+          method: ANY
+
+package:
+  patterns:
+    - ".nuxt"
+    - "!.nuxt/dist/client"
+    - ".output"
+
+plugins:
+  - serverless-offline
+  - serverless-s3-sync
+  - serverless-apigw-binary
+
+custom:
+  defaultStage: development
+  buckets:
+    ASSETS_BUCKET_NAME: ${self:service}-${self:provider.stage}-assets
+    STATIC_BUCKET_NAME: ${self:service}-${self:provider.stage}-static
+  s3Sync:
+    - bucketName: ${self:custom.buckets.ASSETS_BUCKET_NAME}
+      localDir: .nuxt/dist/client
+    - bucketName: ${self:custom.buckets.STATIC_BUCKET_NAME}
+      localDir: static
+  apigwBinary:
+    types:
+      - '*/*'
+
+resources:
+  Resources:
+    ClientAssetsBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.buckets.ASSETS_BUCKET_NAME}
+        CorsConfiguration:
+          CorsRules:
+            -
+              AllowedOrigins:
+                - '*'
+              AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - GET
+                - HEAD
+                - PUT
+                - POST
+                - DELETE
+              MaxAge: 3000
+              ExposedHeaders:
+                - x-amz-server-side-encryption
+                - x-amz-request-id
+                - x-amz-id-2
+    ClientAssetsBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: ClientAssetsBucket
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement: [
+            {
+              Action: ['s3:GetObject'],
+              Effect: 'Allow',
+              Resource: {
+                Fn::Join: ['', ['arn:aws:s3:::', { Ref: 'ClientAssetsBucket' }, '/*']],
+              },
+              Principal: '*'
+            },
+          ]
+    ClientStaticBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.buckets.STATIC_BUCKET_NAME}
+        CorsConfiguration:
+          CorsRules:
+            -
+              AllowedOrigins:
+                - '*'
+              AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - GET
+                - HEAD
+                - PUT
+                - POST
+                - DELETE
+              MaxAge: 3000
+              ExposedHeaders:
+                - x-amz-server-side-encryption
+                - x-amz-request-id
+                - x-amz-id-2
+    ClientStaticBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: ClientStaticBucket
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement: [
+            {
+              Action: ['s3:GetObject'],
+              Effect: 'Allow',
+              Resource: {
+                Fn::Join: ['', ['arn:aws:s3:::', { Ref: 'ClientStaticBucket' }, '/*']],
+              },
+              Principal: '*'
+            },
+          ]
